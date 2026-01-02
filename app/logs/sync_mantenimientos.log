@@ -10606,3 +10606,334 @@
 2025-12-15 09:40:28,362 - services.sync_service - INFO - ================================================================================
 2025-12-15 09:40:28,363 - services.sync_service - INFO - 
 2025-12-15 12:19:09,519 - __main__ - INFO - Shutting down...
+2026-01-02 10:10:36,518 - app.main - INFO - ================================================================================
+2026-01-02 10:10:36,523 - app.main - INFO - [INICIO] Sync Mantenimientos Service v1.0.0
+2026-01-02 10:10:36,523 - app.main - INFO - ================================================================================
+2026-01-02 10:10:36,523 - app.main - INFO - Host: 0.0.0.0:8001
+2026-01-02 10:10:36,523 - app.main - INFO - Debug: True
+2026-01-02 10:10:36,523 - app.main - INFO - Log Level: INFO
+2026-01-02 10:10:36,525 - app.main - INFO - 
+2026-01-02 10:10:36,525 - app.main - INFO - CRM Configuration:
+2026-01-02 10:10:36,525 - app.main - INFO -   Base URL: https://crmcotel.com.co
+2026-01-02 10:10:36,525 - app.main - INFO -   Client ID: cd031831-d1f0-0a8b-b...
+2026-01-02 10:10:36,525 - app.main - INFO -   Token URL: https://crmcotel.com.co/crm/Api/access_token
+2026-01-02 10:10:36,525 - app.main - INFO -   Equipos URL: https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:10:36,525 - app.main - INFO - 
+2026-01-02 10:10:36,525 - app.main - INFO - Database API Configuration:
+2026-01-02 10:10:36,525 - app.main - INFO -   API URL: https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app
+2026-01-02 10:10:36,526 - app.main - INFO -   Schema: monitoreo_equipos
+2026-01-02 10:10:36,526 - app.main - INFO -   Tabla origen: dispositivos
+2026-01-02 10:10:36,526 - app.main - INFO -   Tabla destino: mantenimientos
+2026-01-02 10:10:36,526 - app.main - INFO - 
+2026-01-02 10:10:36,526 - app.main - INFO - Dispositivos Configuration:
+2026-01-02 10:10:36,526 - app.main - INFO -   Campo serial: serial_number_device
+2026-01-02 10:10:36,526 - app.main - INFO - 
+2026-01-02 10:10:36,528 - app.main - INFO - Sync Configuration:
+2026-01-02 10:10:36,528 - app.main - INFO -   Batch Size: 1000
+2026-01-02 10:10:36,529 - app.main - INFO -   Max Retries: 3
+2026-01-02 10:10:36,529 - app.main - INFO - 
+2026-01-02 10:10:36,815 - app.main - INFO - [STARTUP] Cliente de API de base de datos inicializado.
+2026-01-02 10:11:26,843 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app "HTTP/1.1 200 OK"
+2026-01-02 10:11:37,932 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 200 OK"
+2026-01-02 10:11:44,465 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=serial "HTTP/1.1 200 OK"
+2026-01-02 10:11:44,826 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=customer_name "HTTP/1.1 200 OK"
+2026-01-02 10:11:45,474 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.asc&limit=1 "HTTP/1.1 200 OK"
+2026-01-02 10:11:45,681 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.desc&limit=1 "HTTP/1.1 200 OK"
+2026-01-02 10:12:14,661 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?select=device_type&device_type=not.is.null "HTTP/1.1 200 OK"
+2026-01-02 10:13:22,452 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.UPS "HTTP/1.1 200 OK"
+2026-01-02 10:13:22,757 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.UPS&serial_number_device=not.eq. "HTTP/1.1 200 OK"
+2026-01-02 10:13:23,136 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.UPS&or=%28serial_number_device.is.null%2Cserial_number_device.eq.%29 "HTTP/1.1 200 OK"
+2026-01-02 10:13:23,371 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.UPS&serial_number_device=not.eq.&select=serial_number_device "HTTP/1.1 200 OK"
+2026-01-02 10:13:23,575 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?select=device_id%2Cdevice_name%2Cserial_number_device&device_type=eq.UPS&or=%28serial_number_device.is.null%2Cserial_number_device.eq.%29&order=device_name "HTTP/1.1 200 OK"
+2026-01-02 10:13:23,777 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.UPS&serial_number_device=not.eq.&select=serial_number_device%2Cdevice_name "HTTP/1.1 200 OK"
+2026-01-02 10:13:23,985 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?select=serial_number_device&serial_number_device=not.eq.&device_type=in.%28%22UPS%22%29 "HTTP/1.1 200 OK"
+2026-01-02 10:13:49,996 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.Cooling+Device "HTTP/1.1 200 OK"
+2026-01-02 10:13:50,301 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.Cooling+Device&serial_number_device=not.eq. "HTTP/1.1 200 OK"
+2026-01-02 10:13:50,606 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.Cooling+Device&or=%28serial_number_device.is.null%2Cserial_number_device.eq.%29 "HTTP/1.1 200 OK"
+2026-01-02 10:13:50,818 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.Cooling+Device&serial_number_device=not.eq.&select=serial_number_device "HTTP/1.1 200 OK"
+2026-01-02 10:13:51,018 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?select=device_id%2Cdevice_name%2Cserial_number_device&device_type=eq.Cooling+Device&or=%28serial_number_device.is.null%2Cserial_number_device.eq.%29&order=device_name "HTTP/1.1 200 OK"
+2026-01-02 10:13:51,216 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?device_type=eq.Cooling+Device&serial_number_device=not.eq.&select=serial_number_device%2Cdevice_name "HTTP/1.1 200 OK"
+2026-01-02 10:13:51,434 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?select=serial_number_device&serial_number_device=not.eq.&device_type=in.%28%22Cooling+Device%22%29 "HTTP/1.1 200 OK"
+2026-01-02 10:14:13,443 - app.services.crm_client - INFO - CRMClient inicializado
+2026-01-02 10:14:13,446 - app.services.crm_client - INFO -   Base URL: https://crmcotel.com.co
+2026-01-02 10:14:13,446 - app.services.crm_client - INFO -   Token URL: https://crmcotel.com.co/crm/Api/access_token
+2026-01-02 10:14:13,446 - app.services.crm_client - INFO -   Equipos URL: https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:14:13,446 - app.services.crm_client - INFO - [AUTH] Obteniendo token del CRM...
+2026-01-02 10:14:13,965 - app.services.crm_client - INFO - [RESPONSE] Status Code: 200
+2026-01-02 10:14:13,966 - app.services.crm_client - INFO - [OK] Token obtenido exitosamente
+2026-01-02 10:20:32,519 - app.main - INFO - 
+2026-01-02 10:20:32,520 - app.main - INFO - [SOLICITUD] Nueva solicitud de sincronizacion recibida
+2026-01-02 10:20:32,520 - app.main - INFO -    Truncate first: True
+2026-01-02 10:20:32,522 - app.main - INFO -    Device types: TODOS
+2026-01-02 10:20:32,522 - app.main - INFO -    Seriales proporcionados: 0
+2026-01-02 10:20:32,522 - app.services.crm_client - INFO - CRMClient inicializado
+2026-01-02 10:20:32,522 - app.services.crm_client - INFO -   Base URL: https://crmcotel.com.co
+2026-01-02 10:20:32,522 - app.services.crm_client - INFO -   Token URL: https://crmcotel.com.co/crm/Api/access_token
+2026-01-02 10:20:32,522 - app.services.crm_client - INFO -   Equipos URL: https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:20:32,524 - app.services.sync_service - INFO - SyncService inicializado
+2026-01-02 10:20:32,524 - app.services.sync_service - INFO - 
+2026-01-02 10:20:32,524 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:20:32,524 - app.services.sync_service - INFO -          INICIO DE SINCRONIZACION ASINCRONA
+2026-01-02 10:20:32,524 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:20:32,524 - app.services.sync_service - INFO - Inicio: 2026-01-02 10:20:32
+2026-01-02 10:20:32,526 - app.services.sync_service - INFO - Fuente: API de BD (Tabla 'dispositivos')
+2026-01-02 10:20:32,527 - app.services.sync_service - INFO - Destino: API de BD (Tabla 'mantenimientos')
+2026-01-02 10:20:32,528 - app.services.sync_service - INFO - Filtro dispositivos: TODOS
+2026-01-02 10:20:32,528 - app.services.sync_service - INFO - Estrategia: Insertar solo registros nuevos
+2026-01-02 10:20:32,530 - app.services.sync_service - INFO - 
+2026-01-02 10:20:32,532 - app.services.sync_service - INFO - PASO 1/6: Verificando conexión con la API de la BD...
+2026-01-02 10:20:33,372 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app "HTTP/1.1 200 OK"
+2026-01-02 10:20:33,481 - app.services.sync_service - INFO - [OK] La API de la BD está respondiendo.
+2026-01-02 10:20:33,481 - app.services.sync_service - INFO - 
+2026-01-02 10:20:33,483 - app.services.sync_service - INFO - PASO 2/6: Limpiando tabla (TRUNCATE)...
+2026-01-02 10:20:33,483 - app.services.database_api_client - WARNING - [AVISO] Eliminando TODOS los registros de la tabla 'mantenimientos' via DELETE. Esto no reinicia secuencias de IDs.
+2026-01-02 10:20:35,603 - httpx - INFO - HTTP Request: DELETE https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 200 OK"
+2026-01-02 10:20:40,960 - app.services.database_api_client - INFO - Todos los registros de 'mantenimientos' eliminados exitosamente via DELETE.
+2026-01-02 10:20:40,960 - app.services.sync_service - INFO - 
+2026-01-02 10:20:40,962 - app.services.sync_service - INFO - PASO 3/6: Obteniendo lista de seriales...
+2026-01-02 10:20:40,962 - app.services.sync_service - INFO - Consultando seriales para los tipos: TODOS
+2026-01-02 10:20:41,129 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?select=serial_number_device&serial_number_device=not.eq. "HTTP/1.1 200 OK"
+2026-01-02 10:20:41,133 - app.services.sync_service - INFO - [INFO] Se obtuvieron 222 seriales únicos y válidos de la base de datos.
+2026-01-02 10:20:41,133 - app.services.sync_service - INFO - [OK] 222 seriales a consultar en CRM.
+2026-01-02 10:20:41,134 - app.services.sync_service - INFO - 
+2026-01-02 10:20:41,134 - app.services.sync_service - INFO - PASO 4/6: Consultando mantenimientos desde CRM...
+2026-01-02 10:20:41,134 - app.services.crm_client - INFO - ================================================================================
+2026-01-02 10:20:41,134 - app.services.crm_client - INFO - [RESPONSE] CONSULTANDO MANTENIMIENTOS POR SERIALES
+2026-01-02 10:20:41,134 - app.services.crm_client - INFO - ================================================================================
+2026-01-02 10:20:41,134 - app.services.crm_client - INFO - [AUTH] Obteniendo token del CRM...
+2026-01-02 10:20:41,541 - app.services.crm_client - INFO - [RESPONSE] Status Code: 200
+2026-01-02 10:20:41,543 - app.services.crm_client - INFO - [OK] Token obtenido exitosamente
+2026-01-02 10:20:41,544 - app.services.crm_client - INFO - [QUERY] Consultando 222 seriales
+2026-01-02 10:20:41,544 - app.services.crm_client - INFO - [WEB] POST https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:20:51,678 - app.services.crm_client - INFO - [RESPONSE] Status Code: 200
+2026-01-02 10:20:51,723 - app.services.crm_client - INFO - [OK] Mantenimientos extraídos del campo 'data'
+2026-01-02 10:20:51,723 - app.services.crm_client - INFO - 
+2026-01-02 10:20:51,723 - app.services.crm_client - INFO - [STATS] RESUMEN DE CONSULTA:
+2026-01-02 10:20:51,723 - app.services.crm_client - INFO -    * Seriales consultados: 222
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * Mantenimientos obtenidos: 4682
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * Timestamp: 2026-01-02 10:20:51
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO - 
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO - [NOTA] Ejemplo del primer mantenimiento:
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * Campos disponibles: ['nombre_ods', 'tipo_mantenimento', 'id_equipos', 'nombre_equipo', 'marca', 'modelo', 'linea', 'fecha_creacion', 'serial', 'reporte', 'hora_salida', 'observaciones_reporte', 'estado_reporte', 'nit', 'cliente']
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * nombre_ods: ODS-32456
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * tipo_mantenimento: None
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * id_equipos: 321e1337-4931-a076-343b-5a74c0aa6e62
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * nombre_equipo: UPS GALAXY 3500 DE 20KVA
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * marca: APC
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO -    * ... y 10 campos más
+2026-01-02 10:20:51,725 - app.services.crm_client - INFO - ================================================================================
+2026-01-02 10:20:51,725 - app.services.sync_service - INFO - [INFO] De 222 seriales consultados, 217 retornaron datos.
+2026-01-02 10:20:51,725 - app.services.sync_service - WARNING - [AVISO] 5 seriales no retornaron mantenimientos.
+2026-01-02 10:20:51,725 - app.services.sync_service - INFO - 
+2026-01-02 10:20:51,725 - app.services.sync_service - INFO - PASO 5/6: Comparando con BD para encontrar registros nuevos...
+2026-01-02 10:20:51,725 - app.services.sync_service - INFO - Se obtuvieron 4682 registros del CRM.
+2026-01-02 10:20:51,725 - app.services.sync_service - INFO - Se descartaron 62 registros por no tener la combinación (ODS, Reporte, Observaciones).
+2026-01-02 10:20:51,725 - app.services.sync_service - INFO - Se procesarán 4620 registros válidos.
+2026-01-02 10:20:52,089 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=ods_name%2Creport_id%2Cmaintenance_remarks&ods_name=not.is.null&report_id=not.is.null&maintenance_remarks=not.is.null "HTTP/1.1 200 OK"
+2026-01-02 10:20:52,090 - app.services.sync_service - INFO - Se encontraron 0 registros existentes en la BD (basado en ODS, Reporte y Observaciones).
+2026-01-02 10:20:52,097 - app.services.sync_service - INFO - Total de registros nuevos a insertar: 4615
+2026-01-02 10:20:52,097 - app.services.sync_service - INFO - 
+2026-01-02 10:20:52,100 - app.services.sync_service - INFO - PASO 6/6: Mapeando e insertando registros nuevos...
+2026-01-02 10:20:52,121 - app.services.sync_service - INFO - [INFO] Insertando 4615 registros en 5 lotes...
+2026-01-02 10:20:52,122 - app.services.sync_service - INFO - [LOTE] Procesando lote 1/5 (1000 registros)...
+2026-01-02 10:20:56,281 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:20:57,423 - app.services.sync_service - INFO -    [OK] Lote 1 insertado. 1000 registros guardados.
+2026-01-02 10:20:57,423 - app.services.sync_service - INFO - [LOTE] Procesando lote 2/5 (1000 registros)...
+2026-01-02 10:20:59,565 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:21:01,460 - app.services.sync_service - INFO -    [OK] Lote 2 insertado. 1000 registros guardados.
+2026-01-02 10:21:01,460 - app.services.sync_service - INFO - [LOTE] Procesando lote 3/5 (1000 registros)...
+2026-01-02 10:21:02,835 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:21:04,089 - app.services.sync_service - INFO -    [OK] Lote 3 insertado. 1000 registros guardados.
+2026-01-02 10:21:04,089 - app.services.sync_service - INFO - [LOTE] Procesando lote 4/5 (1000 registros)...
+2026-01-02 10:21:06,516 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:21:07,872 - app.services.sync_service - INFO -    [OK] Lote 4 insertado. 1000 registros guardados.
+2026-01-02 10:21:07,872 - app.services.sync_service - INFO - [LOTE] Procesando lote 5/5 (615 registros)...
+2026-01-02 10:21:08,680 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:21:09,813 - app.services.sync_service - INFO -    [OK] Lote 5 insertado. 615 registros guardados.
+2026-01-02 10:21:09,813 - app.services.sync_service - INFO - 
+2026-01-02 10:21:09,813 - app.services.sync_service - INFO - [STATS] Obteniendo estadísticas finales de la tabla mantenimientos...
+2026-01-02 10:21:10,314 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 200 OK"
+2026-01-02 10:21:17,680 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=serial "HTTP/1.1 200 OK"
+2026-01-02 10:21:19,006 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=customer_name "HTTP/1.1 200 OK"
+2026-01-02 10:21:19,529 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.asc&limit=1 "HTTP/1.1 200 OK"
+2026-01-02 10:21:19,727 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.desc&limit=1 "HTTP/1.1 200 OK"
+2026-01-02 10:21:19,727 - app.services.sync_service - INFO - 
+2026-01-02 10:21:19,727 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:21:19,727 - app.services.sync_service - INFO -                     RESUMEN FINAL
+2026-01-02 10:21:19,727 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:21:19,727 - app.services.sync_service - INFO - Estado: [OK] EXITOSO
+2026-01-02 10:21:19,727 - app.services.sync_service - INFO - Duración: 47.20 segundos
+2026-01-02 10:21:19,727 - app.services.sync_service - INFO - Fin: 2026-01-02 10:21:19
+2026-01-02 10:21:19,742 - app.services.sync_service - INFO - Seriales consultados: 222
+2026-01-02 10:21:19,742 - app.services.sync_service - INFO - Mantenimientos desde CRM: 4682
+2026-01-02 10:21:19,742 - app.services.sync_service - INFO - Nuevos a insertar: 4615
+2026-01-02 10:21:19,742 - app.services.sync_service - INFO - Insertados exitosamente: 4615
+2026-01-02 10:21:19,742 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:21:19,744 - app.services.sync_service - INFO - 
+2026-01-02 10:41:42,595 - app.main - INFO - ================================================================================
+2026-01-02 10:41:42,595 - app.main - INFO - [INICIO] Sync Mantenimientos Service v1.0.0
+2026-01-02 10:41:42,595 - app.main - INFO - ================================================================================
+2026-01-02 10:41:42,595 - app.main - INFO - Host: 0.0.0.0:8001
+2026-01-02 10:41:42,595 - app.main - INFO - Debug: True
+2026-01-02 10:41:42,595 - app.main - INFO - Log Level: INFO
+2026-01-02 10:41:42,595 - app.main - INFO - 
+2026-01-02 10:41:42,595 - app.main - INFO - CRM Configuration:
+2026-01-02 10:41:42,595 - app.main - INFO -   Base URL: https://crmcotel.com.co
+2026-01-02 10:41:42,595 - app.main - INFO -   Client ID: cd031831-d1f0-0a8b-b...
+2026-01-02 10:41:42,595 - app.main - INFO -   Token URL: https://crmcotel.com.co/crm/Api/access_token
+2026-01-02 10:41:42,595 - app.main - INFO -   Equipos URL: https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:41:42,595 - app.main - INFO - 
+2026-01-02 10:41:42,595 - app.main - INFO - Database API Configuration:
+2026-01-02 10:41:42,595 - app.main - INFO -   API URL: https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app
+2026-01-02 10:41:42,595 - app.main - INFO -   Schema: monitoreo_equipos
+2026-01-02 10:41:42,595 - app.main - INFO -   Tabla origen: dispositivos
+2026-01-02 10:41:42,595 - app.main - INFO -   Tabla destino: mantenimientos
+2026-01-02 10:41:42,595 - app.main - INFO - 
+2026-01-02 10:41:42,595 - app.main - INFO - Dispositivos Configuration:
+2026-01-02 10:41:42,595 - app.main - INFO -   Campo serial: serial_number_device
+2026-01-02 10:41:42,595 - app.main - INFO - 
+2026-01-02 10:41:42,595 - app.main - INFO - Sync Configuration:
+2026-01-02 10:41:42,595 - app.main - INFO -   Batch Size: 1000
+2026-01-02 10:41:42,595 - app.main - INFO -   Max Retries: 3
+2026-01-02 10:41:42,595 - app.main - INFO - 
+2026-01-02 10:41:42,834 - app.main - INFO - [STARTUP] Cliente de API de base de datos inicializado.
+2026-01-02 10:42:21,848 - app.main - INFO - 
+2026-01-02 10:42:21,848 - app.main - INFO - [SOLICITUD] Nueva solicitud de sincronizacion recibida
+2026-01-02 10:42:21,848 - app.main - INFO -    Truncate first: True
+2026-01-02 10:42:21,848 - app.main - INFO -    Device types: TODOS
+2026-01-02 10:42:21,848 - app.main - INFO -    Seriales proporcionados: 0
+2026-01-02 10:42:21,855 - app.services.crm_client - INFO - CRMClient inicializado
+2026-01-02 10:42:21,855 - app.services.crm_client - INFO -   Base URL: https://crmcotel.com.co
+2026-01-02 10:42:21,855 - app.services.crm_client - INFO -   Token URL: https://crmcotel.com.co/crm/Api/access_token
+2026-01-02 10:42:21,855 - app.services.crm_client - INFO -   Equipos URL: https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:42:21,855 - app.services.sync_service - INFO - SyncService inicializado
+2026-01-02 10:42:21,858 - app.services.sync_service - INFO - 
+2026-01-02 10:42:21,858 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:42:21,858 - app.services.sync_service - INFO -          INICIO DE SINCRONIZACION ASINCRONA
+2026-01-02 10:42:21,858 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:42:21,861 - app.services.sync_service - INFO - Inicio: 2026-01-02 10:42:21
+2026-01-02 10:42:21,862 - app.services.sync_service - INFO - Fuente: API de BD (Tabla 'dispositivos')
+2026-01-02 10:42:21,862 - app.services.sync_service - INFO - Destino: API de BD (Tabla 'mantenimientos')
+2026-01-02 10:42:21,862 - app.services.sync_service - INFO - Filtro dispositivos: TODOS
+2026-01-02 10:42:21,862 - app.services.sync_service - INFO - Estrategia: Insertar solo registros nuevos
+2026-01-02 10:42:21,862 - app.services.sync_service - INFO - 
+2026-01-02 10:42:21,862 - app.services.sync_service - INFO - PASO 1/6: Verificando conexión con la API de la BD...
+2026-01-02 10:42:22,792 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app "HTTP/1.1 200 OK"
+2026-01-02 10:42:22,862 - app.services.sync_service - INFO - [OK] La API de la BD está respondiendo.
+2026-01-02 10:42:22,868 - app.services.sync_service - INFO - 
+2026-01-02 10:42:22,869 - app.services.sync_service - INFO - PASO 2/6: Limpiando tabla (TRUNCATE)...
+2026-01-02 10:42:22,869 - app.services.database_api_client - WARNING - [AVISO] Eliminando TODOS los registros de la tabla 'mantenimientos' via DELETE. Esto no reinicia secuencias de IDs.
+2026-01-02 10:42:24,937 - httpx - INFO - HTTP Request: DELETE https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 200 OK"
+2026-01-02 10:42:29,459 - app.services.database_api_client - INFO - Todos los registros de 'mantenimientos' eliminados exitosamente via DELETE.
+2026-01-02 10:42:29,459 - app.services.sync_service - INFO - 
+2026-01-02 10:42:29,459 - app.services.sync_service - INFO - PASO 3/6: Obteniendo lista de seriales...
+2026-01-02 10:42:29,459 - app.services.sync_service - INFO - Consultando seriales para los tipos: TODOS
+2026-01-02 10:42:29,617 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/dispositivos?select=serial_number_device&serial_number_device=not.eq. "HTTP/1.1 200 OK"
+2026-01-02 10:42:29,636 - app.services.sync_service - INFO - [INFO] Se obtuvieron 222 seriales únicos y válidos de la base de datos.
+2026-01-02 10:42:29,636 - app.services.sync_service - INFO - [OK] 222 seriales a consultar en CRM.
+2026-01-02 10:42:29,636 - app.services.sync_service - INFO - 
+2026-01-02 10:42:29,636 - app.services.sync_service - INFO - PASO 4/6: Consultando mantenimientos desde CRM...
+2026-01-02 10:42:29,636 - app.services.crm_client - INFO - ================================================================================
+2026-01-02 10:42:29,637 - app.services.crm_client - INFO - [RESPONSE] CONSULTANDO MANTENIMIENTOS POR SERIALES
+2026-01-02 10:42:29,637 - app.services.crm_client - INFO - ================================================================================
+2026-01-02 10:42:29,637 - app.services.crm_client - INFO - [AUTH] Obteniendo token del CRM...
+2026-01-02 10:42:29,892 - app.services.crm_client - INFO - [RESPONSE] Status Code: 200
+2026-01-02 10:42:29,892 - app.services.crm_client - INFO - [OK] Token obtenido exitosamente
+2026-01-02 10:42:29,892 - app.services.crm_client - INFO - [QUERY] Consultando 222 seriales
+2026-01-02 10:42:29,892 - app.services.crm_client - INFO - [WEB] POST https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:42:38,765 - app.services.crm_client - INFO - [RESPONSE] Status Code: 200
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO - [OK] Mantenimientos extraídos del campo 'data'
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO - 
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO - [STATS] RESUMEN DE CONSULTA:
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * Seriales consultados: 222
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * Mantenimientos obtenidos: 4682
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * Timestamp: 2026-01-02 10:42:38
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO - 
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO - [NOTA] Ejemplo del primer mantenimiento:
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * Campos disponibles: ['nombre_ods', 'tipo_mantenimento', 'id_equipos', 'nombre_equipo', 'marca', 'modelo', 'linea', 'fecha_creacion', 'serial', 'reporte', 'hora_salida', 'observaciones_reporte', 'estado_reporte', 'nit', 'cliente']
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * nombre_ods: ODS-32456
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * tipo_mantenimento: None
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * id_equipos: 321e1337-4931-a076-343b-5a74c0aa6e62
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * nombre_equipo: UPS GALAXY 3500 DE 20KVA
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * marca: APC
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO -    * ... y 10 campos más
+2026-01-02 10:42:38,790 - app.services.crm_client - INFO - ================================================================================
+2026-01-02 10:42:38,790 - app.services.sync_service - INFO - [INFO] De 222 seriales consultados, 217 retornaron datos.
+2026-01-02 10:42:38,790 - app.services.sync_service - WARNING - [AVISO] 5 seriales no retornaron mantenimientos.
+2026-01-02 10:42:38,790 - app.services.sync_service - INFO - 
+2026-01-02 10:42:38,790 - app.services.sync_service - INFO - PASO 5/6: Comparando con BD para encontrar registros nuevos...
+2026-01-02 10:42:38,794 - app.services.sync_service - INFO - Se obtuvieron 4682 registros del CRM.
+2026-01-02 10:42:38,794 - app.services.sync_service - INFO - Se descartaron 81 registros por no tener la combinación (ODS, Reporte, Observaciones) o por no tener fecha de fin.
+2026-01-02 10:42:38,794 - app.services.sync_service - INFO - Se procesarán 4601 registros válidos.
+2026-01-02 10:42:39,067 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=ods_name%2Creport_id%2Cmaintenance_remarks&ods_name=not.is.null&report_id=not.is.null&maintenance_remarks=not.is.null "HTTP/1.1 200 OK"
+2026-01-02 10:42:39,067 - app.services.sync_service - INFO - Se encontraron 0 registros existentes en la BD (basado en ODS, Reporte y Observaciones).
+2026-01-02 10:42:39,072 - app.services.sync_service - INFO - Total de registros nuevos a insertar: 4596
+2026-01-02 10:42:39,072 - app.services.sync_service - INFO - 
+2026-01-02 10:42:39,072 - app.services.sync_service - INFO - PASO 6/6: Mapeando e insertando registros nuevos...
+2026-01-02 10:42:39,085 - app.services.sync_service - INFO - [INFO] Insertando 4596 registros en 5 lotes...
+2026-01-02 10:42:39,085 - app.services.sync_service - INFO - [LOTE] Procesando lote 1/5 (1000 registros)...
+2026-01-02 10:42:40,149 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:42:41,528 - app.services.sync_service - INFO -    [OK] Lote 1 insertado. 1000 registros guardados.
+2026-01-02 10:42:41,528 - app.services.sync_service - INFO - [LOTE] Procesando lote 2/5 (1000 registros)...
+2026-01-02 10:42:42,999 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:42:44,123 - app.services.sync_service - INFO -    [OK] Lote 2 insertado. 1000 registros guardados.
+2026-01-02 10:42:44,123 - app.services.sync_service - INFO - [LOTE] Procesando lote 3/5 (1000 registros)...
+2026-01-02 10:42:45,313 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:42:46,442 - app.services.sync_service - INFO -    [OK] Lote 3 insertado. 1000 registros guardados.
+2026-01-02 10:42:46,443 - app.services.sync_service - INFO - [LOTE] Procesando lote 4/5 (1000 registros)...
+2026-01-02 10:42:48,194 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:42:49,738 - app.services.sync_service - INFO -    [OK] Lote 4 insertado. 1000 registros guardados.
+2026-01-02 10:42:49,738 - app.services.sync_service - INFO - [LOTE] Procesando lote 5/5 (596 registros)...
+2026-01-02 10:42:50,448 - httpx - INFO - HTTP Request: POST https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 201 Created"
+2026-01-02 10:42:50,870 - app.services.sync_service - INFO -    [OK] Lote 5 insertado. 596 registros guardados.
+2026-01-02 10:42:50,870 - app.services.sync_service - INFO - 
+2026-01-02 10:42:50,870 - app.services.sync_service - INFO - [STATS] Obteniendo estadísticas finales de la tabla mantenimientos...
+2026-01-02 10:42:51,351 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos "HTTP/1.1 200 OK"
+2026-01-02 10:42:53,989 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=serial "HTTP/1.1 200 OK"
+2026-01-02 10:42:54,321 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=customer_name "HTTP/1.1 200 OK"
+2026-01-02 10:42:54,533 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.asc&limit=1 "HTTP/1.1 200 OK"
+2026-01-02 10:42:54,678 - httpx - INFO - HTTP Request: GET https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.desc&limit=1 "HTTP/1.1 200 OK"
+2026-01-02 10:42:54,678 - app.services.sync_service - INFO - 
+2026-01-02 10:42:54,678 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO -                     RESUMEN FINAL
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - Estado: [OK] EXITOSO
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - Duración: 32.82 segundos
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - Fin: 2026-01-02 10:42:54
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - Seriales consultados: 222
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - Mantenimientos desde CRM: 4682
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - Nuevos a insertar: 4596
+2026-01-02 10:42:54,682 - app.services.sync_service - INFO - Insertados exitosamente: 4596
+2026-01-02 10:42:54,684 - app.services.sync_service - INFO - ================================================================================
+2026-01-02 10:42:54,684 - app.services.sync_service - INFO - 
+2026-01-02 10:46:41,255 - app.main - INFO - [SHUTDOWN] Cliente de API de base de datos cerrado.
+2026-01-02 10:46:41,255 - app.main - INFO - Servicio detenido.
+2026-01-02 10:46:42,025 - app.main - INFO - ================================================================================
+2026-01-02 10:46:42,025 - app.main - INFO - [INICIO] Sync Mantenimientos Service v1.0.0
+2026-01-02 10:46:42,025 - app.main - INFO - ================================================================================
+2026-01-02 10:46:42,025 - app.main - INFO - Host: 0.0.0.0:8001
+2026-01-02 10:46:42,025 - app.main - INFO - Debug: True
+2026-01-02 10:46:42,025 - app.main - INFO - Log Level: INFO
+2026-01-02 10:46:42,025 - app.main - INFO - 
+2026-01-02 10:46:42,025 - app.main - INFO - CRM Configuration:
+2026-01-02 10:46:42,025 - app.main - INFO -   Base URL: https://crmcotel.com.co
+2026-01-02 10:46:42,025 - app.main - INFO -   Client ID: cd031831-d1f0-0a8b-b...
+2026-01-02 10:46:42,025 - app.main - INFO -   Token URL: https://crmcotel.com.co/crm/Api/access_token
+2026-01-02 10:46:42,025 - app.main - INFO -   Equipos URL: https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
+2026-01-02 10:46:42,025 - app.main - INFO - 
+2026-01-02 10:46:42,025 - app.main - INFO - Database API Configuration:
+2026-01-02 10:46:42,025 - app.main - INFO -   API URL: https://api-bd-eficiencia-energetica-853514779938.us-central1.run.app
+2026-01-02 10:46:42,025 - app.main - INFO -   Schema: monitoreo_equipos
+2026-01-02 10:46:42,025 - app.main - INFO -   Tabla origen: dispositivos
+2026-01-02 10:46:42,025 - app.main - INFO -   Tabla destino: mantenimientos
+2026-01-02 10:46:42,025 - app.main - INFO - 
+2026-01-02 10:46:42,025 - app.main - INFO - Dispositivos Configuration:
+2026-01-02 10:46:42,025 - app.main - INFO -   Campo serial: serial_number_device
+2026-01-02 10:46:42,025 - app.main - INFO - 
+2026-01-02 10:46:42,025 - app.main - INFO - Sync Configuration:
+2026-01-02 10:46:42,025 - app.main - INFO -   Batch Size: 1000
+2026-01-02 10:46:42,025 - app.main - INFO -   Max Retries: 3
+2026-01-02 10:46:42,025 - app.main - INFO - 
+2026-01-02 10:46:42,231 - app.main - INFO - [STARTUP] Cliente de API de base de datos inicializado.
+2026-01-02 10:47:23,607 - app.main - INFO - [SHUTDOWN] Cliente de API de base de datos cerrado.
+2026-01-02 10:47:23,607 - app.main - INFO - Servicio detenido.

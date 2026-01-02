@@ -1,65 +1,70 @@
 # 🔄 Microservicio de Sincronización de Mantenimientos
 
-Microservicio independiente para sincronizar mantenimientos desde el CRM de Cotel hacia PostgreSQL.
+Microservicio para sincronizar mantenimientos desde el CRM de Cotel, utilizando una API de base de datos (PostgREST) para la persistencia.
 
 ## 📋 Descripción
 
 Este servicio forma parte de la arquitectura de microservicios de CRAC Monitoring. Su responsabilidad es:
 
-1. **Obtener seriales** desde la tabla `dispositivos` en PostgreSQL (filtrados por tipo)
-2. **Consultar mantenimientos** en el CRM de Cotel usando esos seriales
-3. **Comparar** con registros existentes en la base de datos
-4. **Insertar** únicamente los registros nuevos (evitando duplicados)
-5. **Reportar** estadísticas completas del proceso
+1.  **Obtener seriales** de dispositivos desde una API de base de datos.
+2.  **Consultar mantenimientos** en el CRM de Cotel usando esos seriales.
+3.  **Comparar** con los registros existentes en la base de datos (vía API), usando una clave compuesta para evitar duplicados.
+4.  **Insertar** únicamente los registros nuevos a través de la API.
+5.  **Reportar** estadísticas completas y coherentes del proceso.
 
 ## 🏗️ Arquitectura
+
+El servicio orquesta las llamadas entre la API de la base de datos y la API del CRM.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FLUJO DE SINCRONIZACIÓN                      │
 └─────────────────────────────────────────────────────────────────┘
 
-1. PostgreSQL (dispositivos)
-   ├─ Filtrar por device_type = "Cooling Device"
-   ├─ Obtener seriales únicos
+1. API de Base de Datos (PostgREST)
+   ├─ GET /dispositivos?select=serial_number_device... 
+   ├─ Filtrar por device_type
    └─ Resultado: Lista de seriales
         │
         ▼
 2. CRM Cotel API
    ├─ POST /crm/Api/V8/custom/IA/equipos-info
    ├─ Body: { "seriales": [...] }
-   └─ Resultado: Lista de mantenimientos
+   └─ Resultado: Lista de mantenimientos desde el CRM
         │
         ▼
-3. Comparación
-   ├─ Consultar BD: (report_id, maintenance_remarks) existentes
+3. Comparación (en el microservicio)
+   ├─ GET /mantenimientos?select=ods_name,report_id,maintenance_remarks
+   ├─ Crear "llaves únicas" con (ID ODS, ID Reporte, Observaciones)
    ├─ Filtrar del CRM: solo los que NO existen
    └─ Resultado: Lista de mantenimientos nuevos
         │
         ▼
-4. PostgreSQL (mantenimientos)
-   ├─ INSERT solo registros nuevos
+4. API de Base de Datos (PostgREST) 
+   ├─ POST /mantenimientos
+   ├─ Body: [ { ...mantenimiento_nuevo... } ] 
    ├─ Logging detallado
-   └─ Resultado: Estadísticas completas
+   └─ Resultado: Estadísticas completas de inserción
 ```
 
 ## 📦 Estructura del Proyecto
 
 ```
-sync-mantenimientos-service/
-├── config/
-│   └── settings.py              # Configuración con Pydantic Settings
-├── services/
-│   ├── crm_client.py            # Cliente para consultar CRM
-│   ├── postgres_client.py       # Cliente PostgreSQL (lectura + escritura)
-│   └── sync_service.py          # Orquestador del proceso completo
-├── models/
-│   └── schemas.py               # Modelos Pydantic (request/response)
-├── logs/
-│   └── sync_mantenimientos.log  # Logs del servicio
-├── main.py                      # Aplicación FastAPI
-├── requirements.txt             # Dependencias Python
-└── .env                         # Configuración (no commitear)
+sync-mttos-service-dock/ 
+├── app/
+    ├── config/
+    │   └── settings.py              # Configuración con Pydantic Settings
+    ├── services/
+    │   ├── crm_client.py            # Cliente para consultar CRM
+    │   ├── database_api_client.py   # Cliente para API de la BD (PostgREST)
+    │   └── sync_service.py          # Orquestador del proceso completo
+    ├── models/
+    │   └── schemas.py               # Modelos Pydantic (request/response)
+    ├── logs/
+    │   └── sync_mantenimientos.log  # Logs del servicio
+    ├── main.py                      # Aplicación FastAPI
+    ├── requirements.txt             # Dependencias Python
+    └── .env                         # Variables de entorno (no commitear)
 ```
 
 ## 🚀 Instalación
@@ -67,14 +72,15 @@ sync-mantenimientos-service/
 ### Prerequisitos
 
 - Python 3.11+
-- PostgreSQL con base de datos `eficiencia_energetica`
-- Acceso al CRM de Cotel (client_id y client_secret)
+- Acceso a la API de la base de datos (PostgREST) con un token válido.
+- Acceso al CRM de Cotel (client_id y client_secret).
 
 ### Pasos
 
 ```bash
 # 1. Clonar repositorio
-cd sync-mantenimientos-service
+git clone <tu-repositorio>
+cd sync-mttos-service-dock
 
 # 2. Crear entorno virtual
 python -m venv venv
@@ -84,11 +90,10 @@ source venv/bin/activate  # En Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # 4. Configurar variables de entorno
-cp .env.example .env
 nano .env  # Editar con tus credenciales
 
 # 5. Ejecutar el servicio
-python main.py
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 El servicio estará disponible en: `http://localhost:8001`
@@ -98,24 +103,24 @@ El servicio estará disponible en: `http://localhost:8001`
 ### Variables de Entorno Principales
 
 ```bash
+# SERVICIO
+SERVICE_NAME=Sync Mantenimientos Service
+HOST=0.0.0.0
+PORT=8001
+LOG_LEVEL=INFO
+
 # CRM Cotel
 CRM_BASE_URL=https://crmcotel.com.co
 CRM_CLIENT_ID=tu-client-id
 CRM_CLIENT_SECRET=tu-client-secret
 
-# PostgreSQL
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_NAME=eficiencia_energetica
-DB_USER=api_crud_monitoreo_equipos
-DB_PASSWORD=tu-password
-
-# Configuración de Dispositivos
-DEVICE_TYPE_FILTER=Cooling Device  # Tipo de dispositivo a consultar
+# API de Base de Datos (PostgREST)
+DB_API_BASE_URL=https://tu-api-postgrest.com
+DB_API_TOKEN=tu-jwt-token-largo
+DB_API_SCHEMA=monitoreo_equipos
 
 # Sincronización
-BATCH_SIZE=100                      # Tamaño de lote para inserciones
-LOG_LEVEL=INFO                      # Nivel de logging
+BATCH_SIZE=1000                      # Tamaño de lote para inserciones
 ```
 
 ## 📡 API Endpoints
@@ -135,9 +140,8 @@ GET /
   "docs": "/docs",
   "health": "/health",
   "config": {
-    "device_type_filter": "Cooling Device",
-    "source_table": "monitoreo_equipos.dispositivos",
-    "target_table": "monitoreo_equipos.mantenimientos"
+    "default_sync_behavior": "Sincronizar todos los tipos de dispositivos si no se especifica en el request.",
+    "source_table": "monitoreo_equipos.dispositivos"
   }
 }
 ```
@@ -158,7 +162,7 @@ Verifica el estado del servicio, conexión a BD y configuración del CRM.
   "status": "healthy",
   "service": "Sync Mantenimientos Service",
   "version": "1.0.0",
-  "timestamp": "2025-01-05T10:30:00",
+  "timestamp": "2025-12-23T10:30:00.123456",
   "database_connected": true,
   "crm_configured": true
 }
@@ -191,8 +195,7 @@ Lista todos los tipos de dispositivos en la tabla `dispositivos` con sus cantida
       "device_type": "UPS",
       "cantidad": 8
     }
-  ],
-  "default_filter": "Cooling Device"
+  ]
 }
 ```
 
@@ -266,14 +269,14 @@ Ejecuta el proceso completo de sincronización.
 {
   "truncate_first": false,
   "seriales": ["SN001", "SN002"],  // Opcional
-  "device_type": "Cooling Device"   // Opcional
+  "device_type": ["Cooling Device"]   // Opcional
 }
 ```
 
 **Parámetros:**
 - `truncate_first` (bool, opcional): Si es `true`, limpia la tabla antes de insertar. Default: `false`
 - `seriales` (list, opcional): Lista específica de seriales a consultar. Si no se proporciona, se obtienen desde la tabla `dispositivos`
-- `device_type` (string, opcional): Tipo de dispositivo a filtrar. Default: valor de `.env` (normalmente "Cooling Device")
+- `device_type` (string, opcional): Filtra los dispositivos por tipo. Si es nulo, se procesan todos.
 
 **Ejemplos de uso:**
 
@@ -309,62 +312,46 @@ curl -X POST http://localhost:8001/sync/mantenimientos \
 ```json
 {
   "success": true,
-  "start_time": "2025-01-05T10:30:00",
-  "end_time": "2025-01-05T10:35:00",
-  "duration_seconds": 300.5,
-  "dispositivos": {
-    "device_type_filter": "Cooling Device",
-    "source": "tabla dispositivos",
-    "total": 10,
-    "list": []
-  },
+  "start_time": "2025-12-23T10:19:20.682825",
+  "end_time": "2025-12-23T10:19:32.275299",
+  "duration_seconds": 11.59,
   "seriales": {
-    "source": "PostgreSQL (dispositivos - Cooling Device)",
-    "total": 10,
-    "list": ["SN001", "SN002", "SN003", "..."]
+    "source": "BD (dispositivos - ['Cooling Device'])",
+    "total": 467,
+    "list": ["SERIAL1", "SERIAL2", "..."]
   },
   "crm": {
-    "seriales_consultados": 10,
-    "mantenimientos_obtenidos": 150,
-    "timestamp": "2025-01-05T10:31:00"
+    "seriales_consultados": 467,
+    "seriales_con_resultado": 460,
+    "seriales_sin_resultado": 7,
+    "list_seriales_sin_resultado": ["SERIAL_A", "SERIAL_B", "..."],
+    "mantenimientos_obtenidos": 4675,
+    "timestamp": "2025-12-23T10:19:25.123456"
   },
   "comparacion": {
-    "registros_existentes_bd": 1200,
-    "registros_desde_crm": 150,
-    "timestamp": "2025-01-05T10:32:00"
+    "registros_obtenidos_crm": 4675,
+    "registros_descartados_sin_campos_clave": 61,
+    "registros_validos_crm": 4614,
+    "duplicados_en_crm": 5,
+    "existentes_en_bd": 0,
+    "nuevos_a_insertar": 4609
   },
   "database": {
-    "total": 150,
-    "insertados": 25,
-    "duplicados": 125,
+    "total_intentado": 4609,
+    "exitosos": 4609,
     "errores": 0,
-    "exitosos": 25,
     "stats": {
-      "total_registros": 1225,
-      "dispositivos_unicos": 10,
-      "clientes_unicos": 5,
-      "primer_mantenimiento": "2023-01-01T00:00:00",
-      "ultimo_mantenimiento": "2025-01-05T10:00:00"
+      "total_registros": 4609,
+      "dispositivos_unicos": 450,
+      "clientes_unicos": 80,
+      "primer_mantenimiento": "2024-01-15T14:00:00",
+      "ultimo_mantenimiento": "2025-12-23T09:00:00",
+      "error": null
     }
   },
   "errors": []
 }
 ```
-
-**Respuesta con Errores (500):**
-```json
-{
-  "success": false,
-  "start_time": "2025-01-05T10:30:00",
-  "end_time": "2025-01-05T10:30:30",
-  "duration_seconds": 30.0,
-  "errors": [
-    "Error de autenticación con CRM",
-    "No hay seriales de tipo 'Cooling Device' para consultar"
-  ]
-}
-```
-
 ---
 
 ### 6. Estado de Sincronización
@@ -380,13 +367,14 @@ Obtiene estadísticas actuales de la tabla de mantenimientos.
 {
   "service": "Sync Mantenimientos Service",
   "version": "1.0.0",
-  "timestamp": "2025-01-05T10:30:00",
+  "timestamp": "2025-12-23T10:59:00.732668",
   "database_stats": {
-    "total_registros": 1225,
-    "dispositivos_unicos": 10,
-    "clientes_unicos": 5,
-    "primer_mantenimiento": "2023-01-01T00:00:00",
-    "ultimo_mantenimiento": "2025-01-05T10:00:00"
+    "total": 4610,
+    "dispositivos_unicos": 217,
+    "clientes_unicos": 24,
+    "primer_mantenimiento": "2018-02-13T20:33:06",
+    "ultimo_mantenimiento": "2025-12-22T14:56:47",
+    "error": null
   }
 }
 ```
@@ -412,87 +400,6 @@ Prueba la conexión y autenticación con el CRM.
   "token_preview": "...xyz123abc"
 }
 ```
-
----
-
-## 🔄 Proceso de Sincronización Detallado
-
-### Flujo Completo (7 Pasos)
-
-El endpoint `POST /sync/mantenimientos` ejecuta:
-
-#### **PASO 1: Conectar a PostgreSQL** 🔌
-- Establece conexión con la base de datos
-- Verifica credenciales
-
-#### **PASO 2: Verificar Tabla de Destino** 🔍
-- Verifica que existe `monitoreo_equipos.mantenimientos`
-- Valida estructura y columnas
-
-#### **PASO 3: Truncate (Opcional)** 🗑️
-- Si `truncate_first=true`, limpia la tabla completamente
-- Si `false`, usa estrategia de comparación e inserción
-
-#### **PASO 4: Obtener Seriales** 📋
-**Dos opciones:**
-
-**Opción A - Automático (recomendado):**
-```sql
-SELECT DISTINCT serial_number_device 
-FROM monitoreo_equipos.dispositivos 
-WHERE device_type = 'Cooling Device'
-AND serial_number_device IS NOT NULL 
-AND serial_number_device != '';
-```
-
-**Opción B - Manual:**
-- Usar seriales proporcionados en el request body
-
-**Resultado:** Lista de seriales únicos (ej: 10 seriales)
-
-#### **PASO 5: Consultar CRM** 🌐
-```http
-POST https://crmcotel.com.co/crm/Api/V8/custom/IA/equipos-info
-Authorization: Bearer <token>
-Content-Type: application/vnd.api+json
-
-{
-  "seriales": ["SN001", "SN002", "SN003", ...]
-}
-```
-
-**Resultado:** Lista de mantenimientos del CRM (ej: 150 registros)
-
-#### **PASO 6: Comparar con BD** 🔍
-```sql
-SELECT report_id, maintenance_remarks
-FROM monitoreo_equipos.mantenimientos
-WHERE report_id IS NOT NULL 
-AND maintenance_remarks IS NOT NULL;
-```
-
-**Lógica de comparación:**
-- Crear set de tuplas (report_id, maintenance_remarks) existentes
-- Filtrar del CRM solo los que NO están en el set
-- **Resultado:** Solo registros nuevos (ej: 25 nuevos de 150)
-
-#### **PASO 7: Insertar Solo Nuevos** 💾
-```sql
-INSERT INTO monitoreo_equipos.mantenimientos (
-    maintenance_id, ods_name, maintenance_type, device_id, device_name,
-    device_brand, device_model, device_type, datetime_ods_create,
-    serial, report_id, datetime_maintenance_end, maintenance_remarks,
-    report_status, nit, customer_name
-) VALUES (...);
-```
-
-**Características:**
-- Procesamiento en lotes (batch_size=100)
-- Logging detallado de progreso
-- Generación de UUID para maintenance_id
-- Manejo de errores por registro
-
----
 
 ## 🗄️ Esquema de Base de Datos
 
@@ -680,17 +587,6 @@ cat .env | grep CRM_CLIENT
 
 ### Error: "Error de conexión a base de datos"
 
-**Causa:** PostgreSQL no accesible o credenciales incorrectas
-
-**Solución:**
-```bash
-# Probar conexión manual
-psql -h 127.0.0.1 -U api_crud_monitoreo_equipos -d eficiencia_energetica
-
-# Verificar .env
-cat .env | grep DB_
-```
-
 ### Los nuevos mantenimientos no se insertan
 
 **Causa:** Ya existen en BD (duplicados detectados)
@@ -759,8 +655,6 @@ Este servicio es el primero de la arquitectura de microservicios:
 ## 📚 Documentación API Interactiva
 
 - **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
-
 ---
 
 ## 🤝 Contribución
@@ -773,13 +667,31 @@ Este servicio es el primero de la arquitectura de microservicios:
 
 ---
 
+## Dockerización
+
+```bash
+# Construir imagen y ejecutar
+docker build -t sync-mtto-srv .
+docker images
+docker run -d -p 8001:8001 --name sync-mtto-srv-cont sync-mtto-srv
+docker logs -f sync-mtto-srv-cont
+
+# Detener y eliminar
+docker stop sync-mtto-srv-cont
+docker rm sync-mtto-srv-cont
+
+# Borrar imagen
+docker rmi sync-mtto-srv:latest
+```
+---
+
 ## 📄 Licencia
 
-Propiedad de CRAC Monitoring Team.
+Propiedad de Cotel Investments S.A.S.
 
 ---
 
 **Versión**: 1.0.0  
-**Última actualización**: 2025-12-15  
+**Última actualización**: 2025-12-23  
 **Puerto**: 8001  
 **Estado**: ✅ Producción

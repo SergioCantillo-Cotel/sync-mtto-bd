@@ -2,7 +2,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from functools import lru_cache
 from typing import Optional
+from pathlib import Path
 
+# Construir la ruta al archivo .env en el directorio raíz del proyecto
+# Esto hace que la carga sea robusta, sin importar desde dónde se ejecute el script.
+env_path = Path(__file__).resolve().parent.parent.parent / '.env'
 
 class Settings(BaseSettings):
     """
@@ -33,21 +37,11 @@ class Settings(BaseSettings):
     )
     
     # ============================================================
-    # POSTGRESQL
+    # DATABASE API (POSTGREST)
     # ============================================================
-    DB_HOST: str = Field(default="127.0.0.1", description="Host de PostgreSQL")
-    DB_PORT: int = Field(default=5432, description="Puerto de PostgreSQL")
-    DB_NAME: str = Field(default="eficiencia_energetica", description="Nombre de la base de datos")
-    DB_USER: str = Field(default="api_crud_monitoreo_equipos", description="Usuario de la base de datos")
-    DB_PASSWORD: str = Field(default="", description="Contraseña de la base de datos")
-    
-    # ============================================================
-    # DISPOSITIVOS CONFIG
-    # ============================================================
-    DEVICE_TYPE_FILTER: str = Field(
-        default="Cooling Device", 
-        description="Tipo de dispositivo a filtrar de la tabla dispositivos"
-    )
+    DB_API_BASE_URL: str = Field(default="", description="URL base de la API de la base de datos")
+    DB_API_TOKEN: str = Field(default="", description="Bearer token para la API de la base de datos")
+    DB_API_SCHEMA: str = Field(default="monitoreo_equipos", description="Schema profile para la API de la base de datos")
     
     # ============================================================
     # SYNC CONFIG
@@ -66,7 +60,7 @@ class Settings(BaseSettings):
     # CONFIGURACIÓN DEL MODELO
     # ============================================================
     model_config = SettingsConfigDict(
-        env_file='.env',
+        env_file=env_path,
         env_file_encoding='utf-8',
         case_sensitive=True,
         extra='ignore'
@@ -75,11 +69,6 @@ class Settings(BaseSettings):
     # ============================================================
     # PROPIEDADES COMPUTADAS
     # ============================================================
-    
-    @property
-    def database_url(self) -> str:
-        """Construye URL de conexión a PostgreSQL"""
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
     @property
     def crm_api_url(self) -> str:

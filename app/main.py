@@ -1,31 +1,43 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import uvicorn
-import logging
-from datetime import datetime
+import uvicorn, logging, os 
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
 
-from config.settings import get_settings
-from models.schemas import SyncRequest, SyncResponse, HealthResponse, StatusResponse
-from services.sync_service import get_sync_service
-from services.postgres_client import get_postgres_client
-from services.crm_client import get_crm_client
+from .config.settings import get_settings
+from .models.schemas import SyncRequest, SyncResponse, HealthResponse, StatusResponse
+from .services.sync_service import get_sync_service, get_database_api_client
+from .services.crm_client import get_crm_client
 
 # Configuración
 settings = get_settings()
 
-# Configurar logging sin emojis para Windows
+# Asegurarse de que el directorio de logs exista
+log_dir = os.path.dirname(settings.LOG_FILE)
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+# Configurar logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(settings.LOG_FILE, encoding='utf-8')
+        logging.FileHandler(settings.LOG_FILE, encoding='utf-8') # La ruta ahora es segura
     ]
 )
 
 logger = logging.getLogger(__name__)
+
+def get_now_gmt5_iso() -> str:
+    """
+    Obtiene la fecha y hora actual en zona horaria GMT-5 y la devuelve
+    como un string en formato ISO, pero sin el offset de zona horaria.
+    """
+    gmt5_tz = timezone(timedelta(hours=-5))
+    now_gmt5 = datetime.now(gmt5_tz)
+    return now_gmt5.strftime('%Y-%m-%dT%H:%M:%S.%f')
 
 
 @asynccontextmanager
@@ -47,41 +59,39 @@ async def lifespan(app: FastAPI):
     logger.info(f"  Token URL: {settings.CRM_BASE_URL}/crm/Api/access_token")
     logger.info(f"  Equipos URL: {settings.CRM_BASE_URL}/crm/Api/V8/custom/IA/equipos-info")
     logger.info("")
-    logger.info("Database Configuration:")
-    logger.info(f"  Host: {settings.DB_HOST}:{settings.DB_PORT}")
-    logger.info(f"  Database: {settings.DB_NAME}")
-    logger.info(f"  User: {settings.DB_USER}")
-    logger.info(f"  Schema: monitoreo_equipos")
+    logger.info("Database API Configuration:")
+    logger.info(f"  API URL: {settings.DB_API_BASE_URL}")
+    logger.info(f"  Schema: {settings.DB_API_SCHEMA}")
     logger.info(f"  Tabla origen: dispositivos")
     logger.info(f"  Tabla destino: mantenimientos")
     logger.info("")
-    logger.info("Dispositivos Configuration:")
-    logger.info(f"  Filtro por defecto: device_type = '{settings.DEVICE_TYPE_FILTER}'")
+    logger.info("Devices Configuration:")
     logger.info(f"  Campo serial: serial_number_device")
     logger.info("")
     logger.info("Sync Configuration:")
     logger.info(f"  Batch Size: {settings.BATCH_SIZE}")
     logger.info(f"  Max Retries: {settings.MAX_RETRIES}")
     logger.info("")
-    logger.info("[IMPORTANTE] FLUJO DE SINCRONIZACION:")
-    logger.info(f"   1. Obtener seriales desde monitoreo_equipos.dispositivos")
-    logger.info(f"   2. Filtrar por device_type = '{settings.DEVICE_TYPE_FILTER}'")
-    logger.info(f"   3. Consultar CRM con POST /equipos-info")
-    logger.info(f"   4. Comparar con BD e insertar solo nuevos")
-    logger.info("=" * 80)
-    logger.info("")
+
+    # Inicializar clientes
+    db_client = get_database_api_client()
+    await db_client.startup()
+    logger.info("[STARTUP] Cliente de API de base de datos inicializado.")
     
     yield
     
     # Shutdown
-    logger.info("Shutting down...")
+    db_client = get_database_api_client()
+    await db_client.shutdown()
+    logger.info("[SHUTDOWN] Cliente de API de base de datos cerrado.")
+    logger.info("Servicio detenido.")
 
 
 # Crear aplicación
 app = FastAPI(
     title=settings.SERVICE_NAME,
     version=settings.SERVICE_VERSION,
-    description="Microservicio de sincronizacion de mantenimientos desde CRM Cotel a PostgreSQL. Obtiene seriales desde tabla dispositivos.",
+    description="Microservicio de sincronización de mantenimientos en dispositivos desde el CRM Cotel a BD PostgreSQL para alimentar UAI Energy.",
     lifespan=lifespan
 )
 
@@ -107,9 +117,8 @@ async def root():
         "docs": "/docs",
         "health": "/health",
         "config": {
-            "device_type_filter": settings.DEVICE_TYPE_FILTER,
+            "default_sync_behavior": "Sincronizar todos los tipos de dispositivos si no se especifica en el request.",
             "source_table": "monitoreo_equipos.dispositivos",
-            "target_table": "monitoreo_equipos.mantenimientos"
         }
     }
 
@@ -119,26 +128,23 @@ async def health_check():
     """
     Health check del servicio
     """
-    # Verificar conexión a PostgreSQL
-    db_connected = False
+    # Verificar conexión a la API de la BD
+    db_api_healthy = False
     try:
-        postgres_client = get_postgres_client()
-        postgres_client.connect()
-        postgres_client.cursor.execute("SELECT 1;")
-        postgres_client.disconnect()
-        db_connected = True
+        db_client = get_database_api_client()
+        db_api_healthy = await db_client.is_healthy()
     except Exception as e:
-        logger.error(f"Health check DB error: {e}")
+        logger.error(f"Health check DB API error: {e}")
     
     # Verificar configuración del CRM
     crm_configured = bool(settings.CRM_CLIENT_ID and settings.CRM_CLIENT_SECRET)
     
     return HealthResponse(
-        status="healthy" if (db_connected and crm_configured) else "degraded",
+        status="healthy" if (db_api_healthy and crm_configured) else "degraded",
         service=settings.SERVICE_NAME,
         version=settings.SERVICE_VERSION,
-        timestamp=datetime.now().isoformat(),
-        database_connected=db_connected,
+        timestamp=get_now_gmt5_iso(),
+        database_connected=db_api_healthy,
         crm_configured=crm_configured
     )
 
@@ -149,17 +155,13 @@ async def get_sync_status():
     Obtiene el estado actual de la sincronización
     """
     try:
-        postgres_client = get_postgres_client()
-        postgres_client.connect()
-        
-        stats = postgres_client.get_stats()
-        
-        postgres_client.disconnect()
+        db_client = get_database_api_client()
+        stats = await db_client.get_stats()
         
         return StatusResponse(
             service=settings.SERVICE_NAME,
             version=settings.SERVICE_VERSION,
-            timestamp=datetime.now().isoformat(),
+            timestamp=get_now_gmt5_iso(),
             database_stats=stats
         )
         
@@ -175,26 +177,13 @@ async def get_device_types():
     Útil para saber qué valores usar en device_type
     """
     try:
-        postgres_client = get_postgres_client()
-        postgres_client.connect()
-        
-        query = """
-        SELECT DISTINCT device_type, COUNT(*) as cantidad
-        FROM monitoreo_equipos.dispositivos 
-        WHERE device_type IS NOT NULL
-        GROUP BY device_type
-        ORDER BY cantidad DESC;
-        """
-        
-        postgres_client.cursor.execute(query)
-        results = postgres_client.cursor.fetchall()
-        
-        postgres_client.disconnect()
+        db_client = get_database_api_client()
+        results = await db_client.get_device_types()
         
         device_types = [
             {
-                "device_type": row[0],
-                "cantidad": row[1]
+                "device_type": row["device_type"],
+                "cantidad": row["count"]
             }
             for row in results
         ]
@@ -202,7 +191,6 @@ async def get_device_types():
         return {
             "total_types": len(device_types),
             "device_types": device_types,
-            "default_filter": settings.DEVICE_TYPE_FILTER
         }
         
     except Exception as e:
@@ -227,95 +215,38 @@ async def diagnostico_seriales(device_type: str = "Cooling Device"):
         - device_type: Tipo de dispositivo (default: "Cooling Device")
     """
     try:
-        postgres_client = get_postgres_client()
-        postgres_client.connect()
+        db_client = get_database_api_client()
         
-        # Query 1: Estadísticas generales
-        stats_query = """
-        SELECT 
-            COUNT(*) as total,
-            COUNT(serial_number_device) as con_serial,
-            COUNT(*) - COUNT(serial_number_device) as sin_serial,
-            COUNT(DISTINCT serial_number_device) as seriales_unicos
-        FROM monitoreo_equipos.dispositivos 
-        WHERE device_type = %s;
-        """
-        
-        postgres_client.cursor.execute(stats_query, (device_type,))
-        stats = postgres_client.cursor.fetchone()
-        
-        # Query 2: Dispositivos sin serial
-        sin_serial_query = """
-        SELECT 
-            device_id,
-            device_name,
-            serial_number_device
-        FROM monitoreo_equipos.dispositivos 
-        WHERE device_type = %s
-        AND (serial_number_device IS NULL OR serial_number_device = '')
-        ORDER BY device_name;
-        """
-        
-        postgres_client.cursor.execute(sin_serial_query, (device_type,))
-        sin_serial = postgres_client.cursor.fetchall()
-        
-        # Query 3: Seriales duplicados
-        duplicados_query = """
-        SELECT 
-            serial_number_device,
-            COUNT(*) as cantidad,
-            STRING_AGG(device_name, ', ') as dispositivos
-        FROM monitoreo_equipos.dispositivos 
-        WHERE device_type = %s
-        AND serial_number_device IS NOT NULL
-        AND serial_number_device != ''
-        GROUP BY serial_number_device
-        HAVING COUNT(*) > 1
-        ORDER BY cantidad DESC;
-        """
-        
-        postgres_client.cursor.execute(duplicados_query, (device_type,))
-        duplicados = postgres_client.cursor.fetchall()
-        
-        # Query 4: Lista de seriales que SE CONSULTAN
-        seriales_query = """
-        SELECT DISTINCT serial_number_device 
-        FROM monitoreo_equipos.dispositivos 
-        WHERE device_type = %s
-        AND serial_number_device IS NOT NULL 
-        AND serial_number_device != ''
-        ORDER BY serial_number_device;
-        """
-        
-        postgres_client.cursor.execute(seriales_query, (device_type,))
-        seriales_consultados = [row[0] for row in postgres_client.cursor.fetchall()]
-        
-        postgres_client.disconnect()
+        # Obtener todos los datos necesarios con el nuevo cliente
+        stats = await db_client.get_diagnostico_stats(device_type)
+        sin_serial = await db_client.get_diagnostico_sin_serial(device_type)
+        duplicados = await db_client.get_diagnostico_duplicados(device_type) # Este método ya recibe un solo tipo
+        seriales_consultados = await db_client.get_seriales_por_tipos([device_type])
         
         # Preparar respuesta
         dispositivos_sin_serial = [
             {
-                "device_id": row[0],
-                "device_name": row[1],
-                "serial_number_device": row[2] if row[2] else "NULL"
+                "device_id": row.get("device_id"),
+                "device_name": row.get("device_name"),
+                "serial_number_device": row.get("serial_number_device") or "NULL"
             }
             for row in sin_serial
         ]
         
         seriales_duplicados = [
             {
-                "serial": row[0],
-                "cantidad_dispositivos": row[1],
-                "dispositivos": row[2]
+                "serial": row.get("serial_number_device"),
+                "cantidad_dispositivos": row.get("cantidad"),
+                "dispositivos": row.get("dispositivos")
             }
             for row in duplicados
         ]
         
         # Calcular diferencia
-        total = stats[0]
-        con_serial = stats[1]
-        sin_serial_count = stats[2]
-        seriales_unicos = stats[3]
+        total = stats.get("total", 0)
+        con_serial = stats.get("con_serial", 0)
+        sin_serial_count = stats.get("sin_serial", 0)
+        seriales_unicos = stats.get("seriales_unicos", 0)
         duplicados_count = con_serial - seriales_unicos if con_serial > seriales_unicos else 0
         
         return {
@@ -355,24 +286,22 @@ async def sync_mantenimientos(request: SyncRequest):
     Body:
         - truncate_first (bool): Si es True, limpia la tabla antes de insertar
         - seriales (list, opcional): Lista de seriales a consultar. 
-          Si no se proporciona, se obtienen desde tabla dispositivos.
-        - device_type (str, opcional): Tipo de dispositivo a filtrar (ej: "Cooling Device").
-          Si no se proporciona, usa el valor por defecto del .env
+          Si no se proporciona, se obtienen desde la tabla de dispositivos.
+        - device_types (list, opcional): Lista de tipos de dispositivo a filtrar (ej: ["Cooling Device", "Heating Device"]).
+          Si no se proporciona, se sincronizan TODOS los dispositivos con serial.
     
     Flujo:
-        1. Conecta a PostgreSQL
-        2. Obtiene seriales desde tabla dispositivos (filtrado por device_type)
-        3. Consulta CRM con POST /equipos-info
-        4. Consulta BD para ver qué ya existe
-        5. Compara y filtra solo los nuevos
-        6. Inserta solo registros nuevos
+        1. Obtiene seriales desde la tabla de dispositivos, aplicando el filtro de `device_types` si se proporciona.
+        2. Consulta el CRM con los seriales obtenidos.
+        3. Compara con la BD para encontrar registros nuevos.
+        4. Inserta los registros nuevos.
     
     Ejemplos de uso:
-        - Sincronización automática (Cooling Device):
+        - Sincronización de TODOS los dispositivos:
           POST {"truncate_first": false}
         
-        - Con tipo específico:
-          POST {"truncate_first": false, "device_type": "Heating Device"}
+        - Con tipos específicos:
+          POST {"truncate_first": false, "device_types": ["Cooling Device", "Other Device"]}
         
         - Con seriales manuales:
           POST {"truncate_first": false, "seriales": ["SN001", "SN002"]}
@@ -383,17 +312,17 @@ async def sync_mantenimientos(request: SyncRequest):
     logger.info("")
     logger.info("[SOLICITUD] Nueva solicitud de sincronizacion recibida")
     logger.info(f"   Truncate first: {request.truncate_first}")
-    logger.info(f"   Device type: {request.device_type or settings.DEVICE_TYPE_FILTER}")
+    logger.info(f"   Device types: {request.device_types or 'TODOS'}")
     logger.info(f"   Seriales proporcionados: {len(request.seriales) if request.seriales else 0}")
     if request.seriales:
         logger.info(f"   Primeros seriales: {request.seriales[:5]}")
     
     try:
         sync_service = get_sync_service()
-        resultado = sync_service.sync_mantenimientos(
+        resultado = await sync_service.sync_mantenimientos(
             truncate_first=request.truncate_first,
             seriales=request.seriales,
-            device_type=request.device_type
+            device_types=request.device_types
         )
         
         return SyncResponse(**resultado)
