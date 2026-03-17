@@ -19,21 +19,25 @@ class DatabaseApiClient:
             "Authorization": f"Bearer {token}",
             "Accept-Profile": schema,
             "Content-Profile": schema,
-            "Prefer": "return=representation" # Devuelve el objeto insertado/actualizado
+            "Prefer": "return=representation"
         }
         self.client: httpx.AsyncClient | None = None
 
     async def startup(self):
-        self.client = httpx.AsyncClient(headers=self.headers, timeout=60.0)
+        self.client = httpx.AsyncClient(
+            headers=self.headers,
+            timeout=httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0),
+            limits=httpx.Limits(
+                max_keepalive_connections=5,
+                max_connections=10,
+                keepalive_expiry=30.0,   # descartar conexiones inactivas >30s
+            ),
+        )
 
     async def shutdown(self):
         await self.client.aclose()
 
     async def is_healthy(self) -> bool:
-        """
-        Verifica si la API de la base de datos está disponible.
-        PostgREST responde en la ruta raíz con el esquema de la API.
-        """
         try:
             if not self.client:
                 raise RuntimeError("El cliente HTTP no ha sido inicializado. Llama a startup() primero.")
@@ -46,33 +50,25 @@ class DatabaseApiClient:
             return False
 
     async def get_stats(self) -> Dict[str, Any]:
-        """
-        Refactorizado para usar consultas directas a PostgREST.
-        """
         if not self.client:
             raise RuntimeError("El cliente HTTP no ha sido inicializado.")
         
         stats = {}
         try:
-            # Total de registros
             response = await self.client.get(f"{self.base_url}/mantenimientos", headers={"Prefer": "count=exact"})
             response.raise_for_status()
             stats['total'] = int(response.headers.get("Content-Range", "0-0/0").split('/')[-1])
 
-            # Dispositivos únicos (por serial)
             response = await self.client.get(f"{self.base_url}/mantenimientos?select=serial")
             response.raise_for_status()
-            # Procesar en el cliente para obtener valores únicos
             seriales_unicos = {item['serial'] for item in response.json() if item.get('serial')}
             stats['dispositivos_unicos'] = len(seriales_unicos)
 
-            # Primer mantenimiento
             response = await self.client.get(f"{self.base_url}/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.asc&limit=1")
             response.raise_for_status()
             first_mto = response.json()
             stats['primer_mantenimiento'] = first_mto[0]['datetime_maintenance_end'] if first_mto else None
 
-            # Último mantenimiento
             response = await self.client.get(f"{self.base_url}/mantenimientos?select=datetime_maintenance_end&datetime_maintenance_end=not.is.null&order=datetime_maintenance_end.desc&limit=1")
             response.raise_for_status()
             last_mto = response.json()
@@ -88,25 +84,17 @@ class DatabaseApiClient:
         return stats
 
     async def get_device_types(self) -> List[Dict[str, Any]]:
-        """
-        Obtiene los tipos de dispositivos y su cantidad.
-        Refactorizado para usar consultas directas a PostgREST.
-        """
         if not self.client:
             raise RuntimeError("El cliente HTTP no ha sido inicializado.")
         
         try:
-            # Se refactoriza para no usar 'group' que causa conflictos.
-            # 1. Se obtienen todos los device_type no nulos.
-            # 2. Se agrupa y cuenta en el cliente (Python).
             params = {
                 "select": "device_type",
-                "device_type": "not.is.null" # Filtro para no traer nulos
+                "device_type": "not.is.null"
             }
             response = await self.client.get(f"{self.base_url}/dispositivos", params=params)
             response.raise_for_status()
             
-            # Agrupar y contar en Python
             device_counts = defaultdict(int)
             for item in response.json():
                 device_counts[item['device_type']] += 1
@@ -120,18 +108,12 @@ class DatabaseApiClient:
             raise
 
     async def get_seriales_por_tipos(self, device_types: Optional[List[str]] = None) -> List[str]:
-        """
-        Obtiene una lista de seriales únicos para una lista de tipos de dispositivo.
-        Si device_types es None, obtiene seriales de todos los dispositivos.
-        """
         params = {
             "select": "serial_number_device",
             "serial_number_device": "not.is.null",
-            "serial_number_device": "not.eq."  # No vacío
+            "serial_number_device": "not.eq."
         }
         if device_types:
-            # Formato para el filtro 'in' de PostgREST: in.("type 1","type 2")
-            # Se construye la cadena de valores entrecomillados para evitar el SyntaxError con la barra invertida en la f-string.
             quoted_types = ",".join(f'"{dt}"' for dt in device_types)
             params["device_type"] = f"in.({quoted_types})"
 
@@ -140,7 +122,6 @@ class DatabaseApiClient:
         response = await self.client.get(f"{self.base_url}/dispositivos", params=params)
         response.raise_for_status()
         
-        # Extraer seriales únicos y no vacíos
         seriales = {
             item['serial_number_device'] 
             for item in response.json() 
@@ -148,90 +129,213 @@ class DatabaseApiClient:
         }
         return sorted(list(seriales))
 
-    async def get_mantenimientos_existentes(self) -> Set[tuple]:
+    async def get_mantenimientos_existentes(self, seriales: Optional[List[str]] = None) -> Dict[str, Set]:
         """
-        Consulta la API para obtener las combinaciones únicas de 
-        (ods_name, report_id, maintenance_remarks) que ya existen en la tabla.
-        Esta combinación actúa como una clave única para identificar un mantenimiento.
+        Retorna DOS estructuras para deduplicación en capas:
+
+        1. 'ids': Set de maintenance_id que ya existen en la BD.
+           → Es la llave REAL (PK). Evita el error 409 de clave duplicada.
+
+        2. 'composite_keys': Set de tuplas (ods_name, report_id, maintenance_remarks).
+           → Llave de negocio. Detecta registros que el CRM puede haber re-emitido
+             con un id_reporte diferente pero con el mismo contenido.
+
+        OPTIMIZACIÓN: Si se pasan 'seriales', la consulta se filtra solo por esos
+        seriales en lugar de descargar toda la tabla. Esto evita timeouts en GCP
+        cuando la tabla tiene miles de registros creciendo con el tiempo.
+
+        La paginación interna garantiza que aunque el resultado filtrado sea grande,
+        siempre se obtiene completo sin depender de un solo request enorme.
         """
-        params = {
-            "select": "ods_name,report_id,maintenance_remarks",
-            "ods_name": "not.is.null",
-            "report_id": "not.is.null",
-            "maintenance_remarks": "not.is.null"
-        }
         if not self.client:
             raise RuntimeError("El cliente HTTP no ha sido inicializado.")
-        response = await self.client.get(f"{self.base_url}/mantenimientos", params=params)
-        response.raise_for_status()
-        
-        # Crear un set de tuplas para una búsqueda de existencia O(1)
-        return {
-            (item['ods_name'], item['report_id'], item['maintenance_remarks']) 
-            for item in response.json()
-        }
+
+        PAGE_SIZE = 1000  # Registros por página — ajustable según límites de PostgREST
+        ids: Set[str] = set()
+        composite_keys: Set[tuple] = set()
+        offset = 0
+
+        try:
+            while True:
+                params: Dict[str, Any] = {
+                    "select": "maintenance_id,ods_name,report_id,maintenance_remarks",
+                    "order": "maintenance_id",   # orden estable para paginación confiable
+                    "limit": PAGE_SIZE,
+                    "offset": offset,
+                }
+
+                # FILTRO CLAVE: solo traemos los registros de los seriales que
+                # vamos a procesar, no toda la tabla.
+                if seriales:
+                    quoted = ",".join(f'"{s}"' for s in seriales)
+                    params["serial"] = f"in.({quoted})"
+
+                response = await self.client.get(
+                    f"{self.base_url}/mantenimientos",
+                    params=params
+                )
+                response.raise_for_status()
+                pagina = response.json()
+
+                if not pagina:
+                    # No hay más páginas
+                    break
+
+                for item in pagina:
+                    # Capa 1: PK real
+                    if item.get('maintenance_id'):
+                        ids.add(str(item['maintenance_id']))
+
+                    # Capa 2: llave de negocio compuesta
+                    if item.get('ods_name') and item.get('report_id') and item.get('maintenance_remarks'):
+                        composite_keys.add((
+                            item['ods_name'],
+                            item['report_id'],
+                            item['maintenance_remarks']
+                        ))
+
+                if len(pagina) < PAGE_SIZE:
+                    # Última página (incompleta) — no hay más datos
+                    break
+
+                offset += PAGE_SIZE
+
+            logger.info(f"[DEDUP] IDs existentes en BD (filtrado por seriales): {len(ids)}")
+            logger.info(f"[DEDUP] Llaves compuestas existentes en BD: {len(composite_keys)}")
+            return {"ids": ids, "composite_keys": composite_keys}
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error al obtener mantenimientos existentes: {e.response.text}")
+            raise
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout al obtener mantenimientos existentes (offset={offset}): {e}")
+            raise
+        except httpx.RequestError as e:
+            # RemoteProtocolError, ConnectError, ReadError, etc.
+            # Ocurre cuando el servidor cierra una conexión keep-alive inactiva
+            # y httpx intenta reutilizarla. Se reintenta UNA vez con conexión fresca.
+            logger.warning(f"[CONN] Error de conexión en mantenimientos (offset={offset}): {type(e).__name__}: {e}")
+            logger.warning("[CONN] Reintentando con conexión fresca...")
+            try:
+                # Forzar reconexión cerrando y recreando el cliente
+                await self.client.aclose()
+                self.client = httpx.AsyncClient(
+                    headers=self.client.headers,
+                    timeout=httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0),
+                    limits=httpx.Limits(
+                        max_keepalive_connections=5,
+                        max_connections=10,
+                        keepalive_expiry=30.0,
+                    ),
+                )
+                # Reintentar solo la página que falló (offset ya apunta al último intento)
+                params_retry: Dict[str, Any] = {
+                    "select": "maintenance_id,ods_name,report_id,maintenance_remarks",
+                    "order": "maintenance_id",
+                    "limit": PAGE_SIZE,
+                    "offset": offset,
+                }
+                if seriales:
+                    quoted = ",".join(f'"{s}"' for s in seriales)
+                    params_retry["serial"] = f"in.({quoted})"
+                response = await self.client.get(
+                    f"{self.base_url}/mantenimientos",
+                    params=params_retry
+                )
+                response.raise_for_status()
+                pagina = response.json()
+                for item in pagina:
+                    if item.get('maintenance_id'):
+                        ids.add(str(item['maintenance_id']))
+                    if item.get('ods_name') and item.get('report_id') and item.get('maintenance_remarks'):
+                        composite_keys.add((
+                            item['ods_name'],
+                            item['report_id'],
+                            item['maintenance_remarks']
+                        ))
+                logger.info(f"[CONN] Reintento exitoso. Total IDs hasta ahora: {len(ids)}")
+                return {"ids": ids, "composite_keys": composite_keys}
+            except Exception as retry_exc:
+                logger.error(f"[CONN] Reintento también falló: {retry_exc}")
+                raise
 
     async def insertar_mantenimientos(self, mantenimientos: List[Dict[str, Any]]) -> int:
         """
-        Inserta una lista de mantenimientos en la base de datos.
+        [REFACTORIZADO] Inserta mantenimientos usando ON CONFLICT DO NOTHING
+        como red de seguridad final contra el error 409.
+
+        PostgREST interpreta 'resolution=ignore-duplicates' como:
+            INSERT INTO mantenimientos (...) VALUES (...) ON CONFLICT DO NOTHING
+
+        Esto protege contra cualquier duplicado que haya escapado la
+        deduplicación en Python (ej: condición de carrera, datos inconsistentes).
         """
         if not mantenimientos:
             return 0
         
         if not self.client:
             raise RuntimeError("El cliente HTTP no ha sido inicializado.")
-        response = await self.client.post(f"{self.base_url}/mantenimientos", json=mantenimientos)
+
+        # Header especial: le dice a PostgREST que ignore duplicados en lugar de fallar
+        insert_headers = {
+            **self.headers,
+            "Prefer": "return=representation,resolution=ignore-duplicates,count=exact"
+        }
+
+        response = await self.client.post(
+            f"{self.base_url}/mantenimientos",
+            json=mantenimientos,
+            headers=insert_headers
+        )
         response.raise_for_status()
-        # El status 201 indica creación exitosa
-        return len(response.json()) if response.status_code == 201 else 0
+
+        # Con 'count=exact', PostgREST devuelve en Content-Range cuántos se insertaron realmente
+        if response.status_code == 201:
+            content_range = response.headers.get("Content-Range", "")
+            try:
+                # Formato: "0-N/total" o "*/0" si no hubo inserciones
+                total_inserted = int(content_range.split('/')[-1]) if '/' in content_range else len(response.json())
+            except (ValueError, IndexError):
+                total_inserted = len(response.json())
+            return total_inserted
+        # 200 con ignore-duplicates: todos eran duplicados, 0 insertados
+        return 0
 
     async def truncate_mantenimientos(self) -> None:
-        """
-        Trunca la tabla de mantenimientos.
-         ADVERTENCIA: Esto elimina todos los registros pero no reinicia las secuencias de IDs.
-        """
         if not self.client:
             raise RuntimeError("El cliente HTTP no ha sido inicializado.")
         
-        logger.warning("[AVISO] Eliminando TODOS los registros de la tabla 'mantenimientos' via DELETE. Esto no reinicia secuencias de IDs.")
+        logger.warning("[AVISO] Eliminando TODOS los registros de la tabla 'mantenimientos' via DELETE.")
         try:
             response = await self.client.delete(f"{self.base_url}/mantenimientos")
             response.raise_for_status()
-            logger.info("Todos los registros de 'mantenimientos' eliminados exitosamente via DELETE.")
+            logger.info("Todos los registros de 'mantenimientos' eliminados exitosamente.")
         except httpx.HTTPStatusError as e:
-            logger.error(f"Error al eliminar registros de la tabla 'mantenimientos': {e.response.text}")
+            logger.error(f"Error al eliminar registros: {e.response.text}")
             raise
 
     # --- Métodos para el endpoint de Diagnóstico ---
 
     async def get_diagnostico_stats(self, device_type: str) -> Dict[str, int]:
-        """
-        Obtiene estadísticas para el diagnóstico.
-        Refactorizado para usar consultas directas a PostgREST.
-        """
         if not self.client:
             raise RuntimeError("El cliente HTTP no ha sido inicializado.")
         
         stats = {}
         try:
-            # Total de dispositivos del tipo
             response = await self.client.get(f"{self.base_url}/dispositivos", params={"device_type": f"eq.{device_type}"}, headers={"Prefer": "count=exact"})
             response.raise_for_status()
             stats['total'] = int(response.headers.get("Content-Range", "0-0/0").split('/')[-1])
 
-            # Con serial
             params_con_serial = {"device_type": f"eq.{device_type}", "serial_number_device": "not.is.null", "serial_number_device": "not.eq."}
             response = await self.client.get(f"{self.base_url}/dispositivos", params=params_con_serial, headers={"Prefer": "count=exact"})
             response.raise_for_status()
             stats['con_serial'] = int(response.headers.get("Content-Range", "0-0/0").split('/')[-1])
 
-            # Sin serial
             params_sin_serial = {"device_type": f"eq.{device_type}", "or": "(serial_number_device.is.null,serial_number_device.eq.)"}
             response = await self.client.get(f"{self.base_url}/dispositivos", params=params_sin_serial, headers={"Prefer": "count=exact"})
             response.raise_for_status()
             stats['sin_serial'] = int(response.headers.get("Content-Range", "0-0/0").split('/')[-1])
 
-            # Seriales únicos
             params_unicos = {"device_type": f"eq.{device_type}", "serial_number_device": "not.is.null", "serial_number_device": "not.eq.", "select": "serial_number_device"}
             response = await self.client.get(f"{self.base_url}/dispositivos", params=params_unicos)
             response.raise_for_status()
@@ -247,9 +351,6 @@ class DatabaseApiClient:
         return stats
 
     async def get_diagnostico_sin_serial(self, device_type: str) -> List[Dict[str, Any]]:
-        """
-        Obtiene dispositivos sin número de serial.
-        """
         params = {
             "select": "device_id,device_name,serial_number_device",
             "device_type": f"eq.{device_type}",
@@ -263,14 +364,9 @@ class DatabaseApiClient:
         return response.json()
 
     async def get_diagnostico_duplicados(self, device_type: str) -> List[Dict[str, Any]]:
-        """
-        Obtiene seriales duplicados.
-        Refactorizado para procesar en Python, sin RPC.
-        """
         if not self.client:
             raise RuntimeError("El cliente HTTP no ha sido inicializado.")
         
-        # 1. Obtener todos los seriales y nombres de dispositivos para el tipo
         params = {
             "device_type": f"eq.{device_type}",
             "serial_number_device": "not.is.null",
@@ -281,12 +377,10 @@ class DatabaseApiClient:
         response.raise_for_status()
         dispositivos = response.json()
 
-        # 2. Procesar en Python para encontrar duplicados
         seriales_agrupados = defaultdict(list)
         for disp in dispositivos:
             seriales_agrupados[disp['serial_number_device']].append(disp['device_name'])
 
-        # 3. Filtrar y formatear los duplicados
         duplicados = []
         for serial, nombres in seriales_agrupados.items():
             if len(nombres) > 1:
@@ -301,10 +395,6 @@ class DatabaseApiClient:
 
 @lru_cache()
 def get_database_api_client() -> DatabaseApiClient:
-    """
-    Factory para obtener una instancia singleton del DatabaseApiClient.
-    Usa lru_cache para asegurar que solo se cree una instancia.
-    """
     logger.debug("Creando o reutilizando instancia de DatabaseApiClient.")
     settings = get_settings()
     if not all([settings.DB_API_BASE_URL, settings.DB_API_TOKEN, settings.DB_API_SCHEMA]):

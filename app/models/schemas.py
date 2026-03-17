@@ -27,7 +27,7 @@ class DatabaseStats(BaseModel):
     error: Optional[str] = None
 
     class Config:
-        populate_by_name = True # Permite usar el alias 'total'
+        populate_by_name = True
 
 class StatusResponse(BaseModel):
     service: str
@@ -43,13 +43,11 @@ class SyncRequest(BaseModel):
     truncate_first: bool = False
 
 class SerialesInfo(BaseModel):
-    """Información sobre los seriales procesados."""
     source: Optional[str] = None
     total: int = 0
     list: List[str] = []
 
 class CrmInfo(BaseModel):
-    """Resultados de la consulta al CRM."""
     seriales_consultados: int = 0
     seriales_con_resultado: int = 0
     seriales_sin_resultado: int = 0
@@ -58,23 +56,27 @@ class CrmInfo(BaseModel):
     timestamp: Optional[str] = None
 
 class ComparacionInfo(BaseModel):
-    """Resultados de la comparación entre CRM y BD."""
+    """
+    [ACTUALIZADO] Incluye métricas de la deduplicación en doble capa.
+    """
     registros_obtenidos_crm: int = 0
     registros_descartados_sin_campos_clave: int = 0
     registros_validos_crm: int = 0
-    duplicados_en_crm: int = 0
+    # Métricas de deduplicación nuevas
+    descartados_por_id_existente: int = 0       # Capa 1: PK ya existe
+    descartados_por_contenido_existente: int = 0 # Capa 2: llave compuesta ya existe
+    duplicados_en_crm: int = 0                  # Duplicados dentro del propio lote del CRM
+    # Mantenidos para compatibilidad
     existentes_en_bd: int = 0
     nuevos_a_insertar: int = 0
 
 class DatabaseInfo(BaseModel):
-    """Resultados de la operación de inserción en la BD."""
     total_intentado: int = 0
     exitosos: int = 0
     errores: int = 0
     stats: Optional[DatabaseStats] = None
 
 class SyncResponse(BaseModel):
-    """Modelo de respuesta para la sincronización."""
     success: bool
     start_time: str
     end_time: Optional[str] = None
@@ -86,6 +88,4 @@ class SyncResponse(BaseModel):
     errors: List[str] = []
 
     class Config:
-        # Permite crear el modelo desde un diccionario que puede tener más claves
-        # (útil porque el diccionario 'resultado' tiene más info interna)
         extra = 'ignore'
